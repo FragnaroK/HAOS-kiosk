@@ -105,6 +105,19 @@ Chromium is now the recommended default for dashboards with multiple camera card
 Optional additional Chromium CLI flags appended to the default kiosk flags.
 Use this only for advanced tuning or hardware-specific troubleshooting.
 
+### Chromium Auto Login
+
+If enabled, the add-on will attempt to auto-fill username/password and submit the Chromium login form after startup.
+(Default: `true`)
+
+This is a best-effort fallback for Chromium mode and can be disabled if you prefer manual login.
+
+### Chromium Login Retries
+
+Number of Chromium auto-login attempts. (Default: `2`)
+
+Increase this if your login page takes longer to become interactive on slower systems.
+
 ### WebRTC Auto-Grant (HA Only)
 
 If enabled, camera/microphone capture permissions are auto-granted only for your configured HA URL origin.

@@ -69,7 +69,9 @@ privileged:
 
 options:
   browser_mode: "chromium"
-  chromium_flags_extra: ""
+  chromium_flags_extra: "--no-sandbox"
+  chromium_auto_login: true
+  chromium_login_retries: 2
   webrtc_autogrant_ha_only: true
   enable_compositor: false
   compositor_cmd: ""
@@ -116,6 +118,8 @@ schema:
   ha_password: password
   browser_mode: list(chromium|luakit)
   chromium_flags_extra: str?
+  chromium_auto_login: bool
+  chromium_login_retries: int(1,10)
   webrtc_autogrant_ha_only: bool
   enable_compositor: bool
   compositor_cmd: str

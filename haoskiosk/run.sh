@@ -131,6 +131,8 @@ load_config_var HA_USERNAME
 load_config_var HA_PASSWORD "" 1  #Mask password in log
 load_config_var BROWSER_MODE "$BROWSER_MODE_DEFAULT"
 load_config_var CHROMIUM_FLAGS_EXTRA ""
+load_config_var CHROMIUM_AUTO_LOGIN true
+load_config_var CHROMIUM_LOGIN_RETRIES 2
 load_config_var WEBRTC_AUTOGRANT_HA_ONLY true
 load_config_var ENABLE_COMPOSITOR false
 load_config_var COMPOSITOR_CMD ""
@@ -244,6 +246,11 @@ if [ "$WEBRTC_AUTOGRANT_HA_ONLY" = true ]; then
 fi
 if [ "$BROWSER_MODE" = "chromium" ] && [ "$BROWSER_REFRESH" -gt 0 ]; then
     bashio::log.warning "BROWSER_REFRESH=$BROWSER_REFRESH may interrupt camera streams; set to 0 for camera-heavy dashboards"
+fi
+
+if ! [[ "$CHROMIUM_LOGIN_RETRIES" =~ ^[0-9]+$ ]] || [ "$CHROMIUM_LOGIN_RETRIES" -le 0 ]; then
+    bashio::log.warning "Invalid CHROMIUM_LOGIN_RETRIES='$CHROMIUM_LOGIN_RETRIES', defaulting to 2"
+    CHROMIUM_LOGIN_RETRIES=2
 fi
 
 ################################################################################
@@ -794,7 +801,38 @@ if [ "$DEBUG_MODE" != true ]; then
     else
         $BROWSER "$TARGET_URL" &
     fi
-    bashio::log.info "Launching $BROWSER browser(PID=$!): $TARGET_URL"
+    BROWSER_PID=$!
+    bashio::log.info "Launching $BROWSER browser(PID=$BROWSER_PID): $TARGET_URL"
+
+    if [ "$BROWSER_MODE" = "chromium" ] && [ "$CHROMIUM_AUTO_LOGIN" = true ]; then
+        (
+            sleep "$LOGIN_DELAY"
+            for ((attempt=1; attempt<=CHROMIUM_LOGIN_RETRIES; attempt++)); do
+                if ! kill -0 "$BROWSER_PID" 2>/dev/null; then
+                    break
+                fi
+
+                WIN_ID="$(xdotool search --onlyvisible --class Chromium 2>/dev/null | head -n1)"
+                if [ -z "$WIN_ID" ]; then
+                    bashio::log.warning "Chromium auto-login attempt $attempt/$CHROMIUM_LOGIN_RETRIES: no Chromium window found"
+                    sleep "$LOGIN_DELAY"
+                    continue
+                fi
+
+                xdotool windowactivate --sync "$WIN_ID" 2>/dev/null || true
+                # Best-effort field fill: username, tab, password, submit.
+                xdotool key --window "$WIN_ID" --clearmodifiers ctrl+a BackSpace
+                xdotool type --window "$WIN_ID" --delay 1 --clearmodifiers "$HA_USERNAME"
+                xdotool key --window "$WIN_ID" --clearmodifiers Tab
+                xdotool key --window "$WIN_ID" --clearmodifiers ctrl+a BackSpace
+                xdotool type --window "$WIN_ID" --delay 1 --clearmodifiers "$HA_PASSWORD"
+                xdotool key --window "$WIN_ID" --clearmodifiers Return
+
+                bashio::log.info "Chromium auto-login attempt $attempt/$CHROMIUM_LOGIN_RETRIES submitted"
+                sleep "$LOGIN_DELAY"
+            done
+        ) &
+    fi
 
     count=0
     while true; do  # Wait for all browser processes to exit
