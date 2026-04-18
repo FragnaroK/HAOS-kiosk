@@ -76,14 +76,20 @@ cleanup() {
     jobs -p | xargs -r kill
     [ -n "$TTY0_DELETED" ] && mknod -m 620 /dev/tty0 c 4 0
     rm -f /root/.local/share/luakit/cookies.db  # Remove cookie storage (not really necessary, but just in case...)
+    rm -rf /tmp/chromium-kiosk
     exit "$exit_code"
 }
 trap cleanup HUP INT QUIT ABRT TERM EXIT
 
 ################################################################################
 #### Variables
-BROWSER="luakit"
-BROWSER_FLAGS=
+BROWSER_MODE_DEFAULT="chromium"
+CHROMIUM_FLAGS_DEFAULT="--kiosk --no-first-run --no-default-browser-check --disable-extensions --disable-features=Translate,OptimizationHints --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --enable-gpu-rasterization --ignore-gpu-blocklist --enable-zero-copy --user-data-dir=/tmp/chromium-kiosk"
+LUAKIT_FLAGS_DEFAULT=""
+BROWSER=""
+BROWSER_FLAGS=""
+BROWSER_NAME=""
+HA_ORIGIN=""
 
 ################################################################################
 #### Get config variables from HA add-on & set environment variables
@@ -123,6 +129,12 @@ load_config_var() {
 
 load_config_var HA_USERNAME
 load_config_var HA_PASSWORD "" 1  #Mask password in log
+load_config_var BROWSER_MODE "$BROWSER_MODE_DEFAULT"
+load_config_var CHROMIUM_FLAGS_EXTRA ""
+load_config_var WEBRTC_AUTOGRANT_HA_ONLY true
+load_config_var ENABLE_COMPOSITOR false
+load_config_var COMPOSITOR_CMD "xcompmgr -c -r 8"
+load_config_var MSE_PROFILE balanced
 load_config_var HA_URL "http://localhost:8123"
 load_config_var HA_DASHBOARD ""
 load_config_var LOGIN_DELAY 1.0
@@ -157,12 +169,89 @@ if [ -z "$HA_USERNAME" ] || [ -z "$HA_PASSWORD" ]; then
     exit 1
 fi
 
+# Normalize and validate browser/media settings.
+BROWSER_MODE="$(echo "$BROWSER_MODE" | tr '[:upper:]' '[:lower:]')"
+case "$BROWSER_MODE" in
+    chromium|luakit) ;;
+    *)
+        bashio::log.warning "Unsupported BROWSER_MODE='$BROWSER_MODE', defaulting to '$BROWSER_MODE_DEFAULT'"
+        BROWSER_MODE="$BROWSER_MODE_DEFAULT"
+        ;;
+esac
+
+MSE_PROFILE="$(echo "$MSE_PROFILE" | tr '[:upper:]' '[:lower:]')"
+case "$MSE_PROFILE" in
+    compat|balanced|smooth) ;;
+    *)
+        bashio::log.warning "Unsupported MSE_PROFILE='$MSE_PROFILE', defaulting to 'balanced'"
+        MSE_PROFILE="balanced"
+        ;;
+esac
+
+HA_ORIGIN="$(printf '%s' "$HA_URL" | sed -E 's#^(https?://[^/]+).*$#\1#')"
+if [[ ! "$HA_ORIGIN" =~ ^https?:// ]]; then
+    HA_ORIGIN="http://localhost:8123"
+fi
+
+if [ "$BROWSER_MODE" = "chromium" ]; then
+    if command -v chromium-browser >/dev/null 2>&1; then
+        BROWSER="chromium-browser"
+    elif command -v chromium >/dev/null 2>&1; then
+        BROWSER="chromium"
+    else
+        bashio::log.error "Chromium browser was not found in container"
+        exit 1
+    fi
+
+    BROWSER_FLAGS="$CHROMIUM_FLAGS_DEFAULT"
+    case "$MSE_PROFILE" in
+        compat)
+            BROWSER_FLAGS="$BROWSER_FLAGS --disable-gpu"
+            ;;
+        smooth)
+            BROWSER_FLAGS="$BROWSER_FLAGS --enable-features=VaapiVideoDecoder,CanvasOopRasterization"
+            ;;
+        *)
+            BROWSER_FLAGS="$BROWSER_FLAGS --enable-features=VaapiVideoDecoder"
+            ;;
+    esac
+    if [ -n "$CHROMIUM_FLAGS_EXTRA" ]; then
+        BROWSER_FLAGS="$BROWSER_FLAGS $CHROMIUM_FLAGS_EXTRA"
+    fi
+
+    # Limit media capture permissions to the Home Assistant origin in kiosk mode.
+    if [ "$WEBRTC_AUTOGRANT_HA_ONLY" = true ]; then
+        mkdir -p /etc/chromium/policies/managed
+        cat > /etc/chromium/policies/managed/haoskiosk-webrtc.json <<EOF
+{
+  "AudioCaptureAllowed": false,
+  "VideoCaptureAllowed": false,
+  "AudioCaptureAllowedUrls": ["$HA_ORIGIN"],
+  "VideoCaptureAllowedUrls": ["$HA_ORIGIN"],
+  "AutoplayAllowed": true
+}
+EOF
+    fi
+else
+    BROWSER="luakit"
+    BROWSER_FLAGS="$LUAKIT_FLAGS_DEFAULT"
+fi
+
+BROWSER_NAME="$(basename "$BROWSER")"
+bashio::log.info "Browser mode=$BROWSER_MODE Browser=$BROWSER MSE_PROFILE=$MSE_PROFILE HA_ORIGIN=$HA_ORIGIN"
+if [ "$WEBRTC_AUTOGRANT_HA_ONLY" = true ]; then
+    bashio::log.info "WebRTC policy: auto-grant media capture only for $HA_ORIGIN"
+fi
+if [ "$BROWSER_MODE" = "chromium" ] && [ "$BROWSER_REFRESH" -gt 0 ]; then
+    bashio::log.warning "BROWSER_REFRESH=$BROWSER_REFRESH may interrupt camera streams; set to 0 for camera-heavy dashboards"
+fi
+
 ################################################################################
 ### GTK and DBUS-related environment variables to improve stability
 
 export NO_AT_BRIDGE=1                 # Stop GTK from touching at-spi bus
-export GTK_USE_PORTAL=0               # Disable portals
-export GIO_USE_VFS=local              # Local-only GIO
+export GTK_USE_PORTAL=0               # Keep disabled; Chromium policy handles media permissions
+export GIO_USE_VFS=local              # Keep local-only GIO for predictable kiosk behavior
 export DBUS_SESSION_BUS_TIMEOUT=5000  # Shorten DBUS timeouts
 export GTK_CSD=0                      # Disable client side decorations (???)
 ################################################################################
@@ -437,6 +526,17 @@ if ! kill -0 "$O_PID" 2>/dev/null; then  #Checks if process alive
 fi
 bashio::log.info "$WINMGR window manager started successfully..."
 
+if [ "$ENABLE_COMPOSITOR" = true ]; then
+    COMPOSITOR_BIN="${COMPOSITOR_CMD%% *}"
+    if command -v "$COMPOSITOR_BIN" >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        eval "$COMPOSITOR_CMD" &
+        bashio::log.info "Compositor enabled: $COMPOSITOR_CMD"
+    else
+        bashio::log.warning "Compositor binary '$COMPOSITOR_BIN' not found; continuing without compositor"
+    fi
+fi
+
 #### Configure screen timeout (Note: DPMS needs to be enabled/disabled *after* starting window manager)
 xset +dpms  #Turn on DPMS
 xset s "$SCREEN_TIMEOUT"
@@ -666,13 +766,23 @@ fi
 
 #### Start browser (or debug mode)  and wait/sleep
 if [ "$DEBUG_MODE" != true ]; then
+    TARGET_URL="$HA_URL"
+    if [ -n "$HA_DASHBOARD" ]; then
+        TARGET_URL="${HA_URL%/}/${HA_DASHBOARD#/}"
+    fi
+
     ### Run browser in the background and wait for process to exit
-    $BROWSER ${BROWSER_FLAGS:+$BROWSER_FLAGS} "$HA_URL/$HA_DASHBOARD" &
-    bashio::log.info "Launching $BROWSER browser(PID=$!): $HA_URL/$HA_DASHBOARD"
+    if [ -n "$BROWSER_FLAGS" ]; then
+        # shellcheck disable=SC2086
+        $BROWSER $BROWSER_FLAGS "$TARGET_URL" &
+    else
+        $BROWSER "$TARGET_URL" &
+    fi
+    bashio::log.info "Launching $BROWSER browser(PID=$!): $TARGET_URL"
 
     count=0
     while true; do  # Wait for all browser processes to exit
-        if pgrep -f -- "^$BROWSER " > /dev/null 2>&1; then
+        if pgrep -f -- "$BROWSER_NAME" > /dev/null 2>&1; then
             count=0
         else
             count=$((count + 1))
@@ -680,7 +790,7 @@ if [ "$DEBUG_MODE" != true ]; then
         [ $count -ge 3 ] && break # Exit if no browser process for at least 2*5=10 seconds
         sleep 5
     done
-    bashio::log.info "No $BROWSER instances remaining... exiting 'run.sh'..."
+    bashio::log.info "No $BROWSER_NAME instances remaining... exiting 'run.sh'..."
 
 else  ### Debug mode
     bashio::log.info "Entering debug mode (X & $WINMGR window manager but no $BROWSER browser)..."

@@ -42,6 +42,7 @@ RUN apk update && apk add --no-cache \
      openbox \
      onboard \
      unclutter-xfixes \
+     xcompmgr \
      ttf-dejavu \
 ### Linux utils
      bash \
@@ -63,7 +64,7 @@ RUN apk update && apk add --no-cache \
 ### VNC (for debugging) - run: x11vnc -display :0 -forever & \
       x11vnc \
 # Browser
-#    luakit \
+     chromium \
    && apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/v3.21/community luakit=2.3.6-r0 \
    && rm -rf /var/cache/apk/*
 

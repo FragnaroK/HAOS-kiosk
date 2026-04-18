@@ -91,6 +91,45 @@ Enter your Home Assistant login name.
 
 Enter your Home Assistant password.
 
+### Browser Mode
+
+Select which browser engine to run. (Default: `chromium`)
+
+- `chromium`: Recommended for camera grids and WebRTC streams.
+- `luakit`: Legacy fallback mode.
+
+Chromium is now the recommended default for dashboards with multiple camera cards using RTC streams.
+
+### Chromium Flags Extra
+
+Optional additional Chromium CLI flags appended to the default kiosk flags.
+Use this only for advanced tuning or hardware-specific troubleshooting.
+
+### WebRTC Auto-Grant (HA Only)
+
+If enabled, camera/microphone capture permissions are auto-granted only for your configured HA URL origin.
+(Default: `true`)
+
+This is intended for unattended kiosk usage while avoiding broad media access on third-party sites.
+
+### MSE Profile
+
+Rendering profile used for Chromium media playback. (Default: `balanced`)
+
+- `compat`: Most conservative; can help unstable GPU stacks.
+- `balanced`: Default general-purpose profile.
+- `smooth`: Enables more aggressive decode/render acceleration.
+
+### Enable Compositor
+
+Enable a lightweight compositor process to reduce tearing/flicker on some displays. (Default: `false`)
+
+### Compositor Command
+
+Command used when compositor is enabled. (Default: `xcompmgr -c -r 8`)
+
+You can replace this with a custom command if needed for your hardware.
+
 ### HA URL
 
 Default: `http://localhost:8123`\
@@ -118,6 +157,8 @@ Time between browser refreshes. Set to `0` to disable.\
 Recommended because with the default RPi config, console errors *may*
 overwrite the dashboard.\
 (Default: 600 seconds)
+
+For camera-heavy dashboards, setting Browser Refresh to `0` is recommended to avoid stream interruptions.
 
 ### Screen Timeout
 
