@@ -133,7 +133,7 @@ load_config_var BROWSER_MODE "$BROWSER_MODE_DEFAULT"
 load_config_var CHROMIUM_FLAGS_EXTRA ""
 load_config_var WEBRTC_AUTOGRANT_HA_ONLY true
 load_config_var ENABLE_COMPOSITOR false
-load_config_var COMPOSITOR_CMD "xcompmgr -c -r 8"
+load_config_var COMPOSITOR_CMD ""
 load_config_var MSE_PROFILE balanced
 load_config_var HA_URL "http://localhost:8123"
 load_config_var HA_DASHBOARD ""
@@ -527,13 +527,29 @@ fi
 bashio::log.info "$WINMGR window manager started successfully..."
 
 if [ "$ENABLE_COMPOSITOR" = true ]; then
-    COMPOSITOR_BIN="${COMPOSITOR_CMD%% *}"
-    if command -v "$COMPOSITOR_BIN" >/dev/null 2>&1; then
-        # shellcheck disable=SC2086
-        eval "$COMPOSITOR_CMD" &
-        bashio::log.info "Compositor enabled: $COMPOSITOR_CMD"
+    if [ -z "$COMPOSITOR_CMD" ]; then
+        if command -v picom >/dev/null 2>&1; then
+            COMPOSITOR_CMD="picom --backend xrender --vsync"
+        elif command -v compton >/dev/null 2>&1; then
+            COMPOSITOR_CMD="compton --backend xrender --vsync opengl-swc"
+        elif command -v xcompmgr >/dev/null 2>&1; then
+            COMPOSITOR_CMD="xcompmgr -c -r 8"
+        else
+            bashio::log.warning "Compositor enabled but no supported compositor found (tried: picom, compton, xcompmgr); continuing without compositor"
+        fi
+    fi
+
+    if [ -n "$COMPOSITOR_CMD" ]; then
+        COMPOSITOR_BIN="${COMPOSITOR_CMD%% *}"
+        if command -v "$COMPOSITOR_BIN" >/dev/null 2>&1; then
+            # shellcheck disable=SC2086
+            eval "$COMPOSITOR_CMD" &
+            bashio::log.info "Compositor enabled: $COMPOSITOR_CMD"
+        else
+            bashio::log.warning "Compositor binary '$COMPOSITOR_BIN' not found; continuing without compositor"
+        fi
     else
-        bashio::log.warning "Compositor binary '$COMPOSITOR_BIN' not found; continuing without compositor"
+        bashio::log.warning "Compositor remains disabled because no launch command is available"
     fi
 fi
 

@@ -42,7 +42,6 @@ RUN apk update && apk add --no-cache \
      openbox \
      onboard \
      unclutter-xfixes \
-     xcompmgr \
      ttf-dejavu \
 ### Linux utils
      bash \

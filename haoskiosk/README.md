@@ -126,7 +126,11 @@ Enable a lightweight compositor process to reduce tearing/flicker on some displa
 
 ### Compositor Command
 
-Command used when compositor is enabled. (Default: `xcompmgr -c -r 8`)
+Command used when compositor is enabled. (Default: empty)
+
+If left empty and `Enable Compositor` is true, the add-on will auto-detect a compositor in this order: `picom`, `compton`, `xcompmgr`.
+
+You can also set a custom command manually, for example: `picom --backend xrender --vsync`.
 
 You can replace this with a custom command if needed for your hardware.
 
