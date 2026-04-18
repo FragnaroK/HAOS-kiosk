@@ -69,7 +69,7 @@ privileged:
 
 options:
   browser_mode: "chromium"
-  chromium_flags_extra: "--no-sandbox"
+  chromium_flags_extra: ""
   chromium_auto_login: true
   chromium_login_retries: 2
   webrtc_autogrant_ha_only: true

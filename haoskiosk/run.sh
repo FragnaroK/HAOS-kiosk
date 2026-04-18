@@ -84,7 +84,7 @@ trap cleanup HUP INT QUIT ABRT TERM EXIT
 ################################################################################
 #### Variables
 BROWSER_MODE_DEFAULT="chromium"
-CHROMIUM_FLAGS_DEFAULT="--kiosk --no-first-run --no-default-browser-check --disable-extensions --disable-features=Translate,OptimizationHints --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --enable-gpu-rasterization --ignore-gpu-blocklist --enable-zero-copy --user-data-dir=/tmp/chromium-kiosk"
+CHROMIUM_FLAGS_DEFAULT="--no-sandbox --kiosk --no-first-run --no-default-browser-check --disable-extensions --disable-features=Translate,OptimizationHints,ChromeWhatsNewUI,DiscoverFeed --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --enable-gpu-rasterization --ignore-gpu-blocklist --enable-zero-copy --disable-save-password-bubble --user-data-dir=/tmp/chromium-kiosk"
 LUAKIT_FLAGS_DEFAULT=""
 BROWSER=""
 BROWSER_FLAGS=""
@@ -221,19 +221,27 @@ if [ "$BROWSER_MODE" = "chromium" ]; then
         BROWSER_FLAGS="$BROWSER_FLAGS $CHROMIUM_FLAGS_EXTRA"
     fi
 
-    # Limit media capture permissions to the Home Assistant origin in kiosk mode.
-    if [ "$WEBRTC_AUTOGRANT_HA_ONLY" = true ]; then
-        mkdir -p /etc/chromium/policies/managed
-        cat > /etc/chromium/policies/managed/haoskiosk-webrtc.json <<EOF
+    # Write Chromium managed policy: media permissions, suppress save-password and NTP shortcut popups.
+    mkdir -p /etc/chromium/policies/managed
+    cat > /etc/chromium/policies/managed/haoskiosk-webrtc.json <<EOF
 {
-  "AudioCaptureAllowed": false,
-  "VideoCaptureAllowed": false,
+  "AudioCaptureAllowed": ${WEBRTC_AUTOGRANT_HA_ONLY:-false},
+  "VideoCaptureAllowed": ${WEBRTC_AUTOGRANT_HA_ONLY:-false},
   "AudioCaptureAllowedUrls": ["$HA_ORIGIN"],
   "VideoCaptureAllowedUrls": ["$HA_ORIGIN"],
-  "AutoplayAllowed": true
+  "AutoplayAllowed": true,
+  "PasswordManagerEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "PromotionalTabsEnabled": false,
+  "BrowserSignin": 0,
+  "DefaultNotificationsSetting": 2,
+  "DefaultPopupsSetting": 2,
+  "BookmarkBarEnabled": false,
+  "NewTabPageLocation": "$HA_ORIGIN"
 }
 EOF
-    fi
+    bashio::log.info "Chromium managed policy written (/etc/chromium/policies/managed/haoskiosk-webrtc.json)"
 else
     BROWSER="luakit"
     BROWSER_FLAGS="$LUAKIT_FLAGS_DEFAULT"
