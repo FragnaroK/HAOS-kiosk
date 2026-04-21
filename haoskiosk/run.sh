@@ -84,7 +84,7 @@ trap cleanup HUP INT QUIT ABRT TERM EXIT
 ################################################################################
 #### Variables
 BROWSER_MODE_DEFAULT="chromium"
-CHROMIUM_FLAGS_DEFAULT="--no-sandbox --kiosk --no-first-run --no-default-browser-check --disable-extensions --disable-features=Translate,OptimizationHints,ChromeWhatsNewUI,DiscoverFeed --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --enable-gpu-rasterization --ignore-gpu-blocklist --enable-zero-copy --disable-save-password-bubble --user-data-dir=/tmp/chromium-kiosk"
+CHROMIUM_FLAGS_DEFAULT="--no-sandbox --kiosk --no-first-run --no-default-browser-check --disable-extensions --disable-features=Translate,OptimizationHints,ChromeWhatsNewUI,DiscoverFeed --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --enable-gpu-rasterization --ignore-gpu-blocklist --enable-zero-copy --disable-save-password-bubble --disable-web-security --disable-site-isolation-trials --user-data-dir=/tmp/chromium-kiosk"
 LUAKIT_FLAGS_DEFAULT=""
 BROWSER=""
 BROWSER_FLAGS=""

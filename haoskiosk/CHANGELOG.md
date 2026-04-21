@@ -4,6 +4,7 @@
 
 - Updated auto-login JS injection in 'userconf.lua' for 2026.4+
 - Fixed whitelist logic to allow commands outside of default path
+- Added Chromium defaults `--disable-web-security` and `--disable-site-isolation-trials`
 
 ## v1.3.0 - February 2026
 

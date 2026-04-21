@@ -105,6 +105,9 @@ Chromium is now the recommended default for dashboards with multiple camera card
 Optional additional Chromium CLI flags appended to the default kiosk flags.
 Use this only for advanced tuning or hardware-specific troubleshooting.
 
+The built-in Chromium defaults now also include `--disable-web-security`
+and `--disable-site-isolation-trials`.
+
 ### Chromium Auto Login
 
 If enabled, the add-on will attempt to auto-fill username/password and submit the Chromium login form after startup.
